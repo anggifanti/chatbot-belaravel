@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Services\GeminiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache;
 
 class ChatController extends Controller
 {
@@ -45,49 +46,61 @@ class ChatController extends Controller
                 ], 429);
             }
 
-            // Create new conversation if not provided
+            // Get existing conversation or prepare for new one (but don't create yet)
+            $conversation = null;
+            $isNewConversation = false;
+            
             if (!$conversationId) {
-                $conversation = Conversation::create([
-                    'user_id' => $user->id,
-                    'title' => substr($request->message, 0, 50) . '...',
-                ]);
-                $conversationId = $conversation->id;
+                // Mark as new conversation but don't create until API succeeds
+                $isNewConversation = true;
+                $conversationTitle = substr($request->message, 0, 50) . '...';
             } else {
+                // Verify existing conversation belongs to user
                 $conversation = Conversation::where('id', $conversationId)
                     ->where('user_id', $user->id)
                     ->firstOrFail();
             }
 
-            // Save user message
-            Message::create([
+            // Get conversation history for context (only for existing conversations)
+            $context = [];
+            if (!$isNewConversation && $conversation) {
+                $messages = Message::where('conversation_id', $conversationId)
+                    ->orderBy('created_at', 'asc')
+                    ->get();
+
+                $context = $messages->map(function ($message) {
+                    return [
+                        'role' => $message->role,
+                        'content' => $message->content,
+                    ];
+                })->toArray();
+            }
+
+            // **IMPORTANT: Try Gemini API call FIRST, before saving anything**
+            $aiResponse = $this->geminiService->generateResponseWithHistory($request->message, $context);
+
+            // Only if API call succeeds, create conversation (if new) and save messages
+            if ($isNewConversation) {
+                $conversation = Conversation::create([
+                    'user_id' => $user->id,
+                    'title' => $conversationTitle,
+                ]);
+                $conversationId = $conversation->id;
+            }
+
+            $userMessage = Message::create([
                 'conversation_id' => $conversationId,
                 'role' => 'user',
                 'content' => $request->message,
             ]);
 
-            // Get conversation history for context
-            $messages = Message::where('conversation_id', $conversationId)
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            $context = $messages->map(function ($message) {
-                return [
-                    'role' => $message->role,
-                    'content' => $message->content,
-                ];
-            })->toArray();
-
-            // Generate AI response using the more advanced method
-            $aiResponse = $this->geminiService->generateResponseWithHistory($request->message, $context);
-
-            // Save AI response
             $aiMessage = Message::create([
                 'conversation_id' => $conversationId,
                 'role' => 'assistant',
                 'content' => $aiResponse,
             ]);
 
-            // Increment user's message count
+            // Increment user's message count only after successful API call
             $user->incrementMessageCount();
 
             return response()->json([
@@ -95,10 +108,14 @@ class ChatController extends Controller
                 'message' => 'Message sent successfully',
                 'conversation_id' => $conversationId,
                 'response' => $aiResponse,
+                'user_message' => $userMessage,
                 'ai_message' => $aiMessage,
             ]);
 
         } catch (\Exception $e) {
+            // If API fails, no conversations or messages are saved to database
+            \Log::error('Chat API Error: ' . $e->getMessage());
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to send message: ' . $e->getMessage(),
@@ -124,13 +141,25 @@ class ChatController extends Controller
         try {
             $sessionId = $request->session_id ?? 'guest_' . session()->getId();
             
-            // Check guest message limit using session
-            $guestMessageCount = session("guest_messages_{$sessionId}", 0);
+            // Check guest message limit using a more persistent approach
+            // Store in both session and cache to prevent reset on refresh
+            $cacheKey = "guest_messages_{$sessionId}";
+            $sessionKey = "guest_messages_{$sessionId}";
             
-            if ($guestMessageCount >= 3) {
+            // Try to get from session first, then cache as fallback
+            $guestMessageCount = session($sessionKey, null);
+            if ($guestMessageCount === null) {
+                $guestMessageCount = cache($cacheKey, 0);
+                // Restore to session if found in cache
+                if ($guestMessageCount > 0) {
+                    session([$sessionKey => $guestMessageCount]);
+                }
+            }
+            
+            if ($guestMessageCount >= 2) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'You have reached the limit of 3 free messages. Please register to continue chatting.',
+                    'message' => 'You have reached the limit of 2 free messages. Please register to continue chatting.',
                     'limit_reached' => true,
                 ], 429);
             }
@@ -138,9 +167,12 @@ class ChatController extends Controller
             // Generate AI response directly (no database storage for guests)
             $aiResponse = $this->geminiService->generateResponse($request->message);
 
-            // Increment guest message count
+            // Increment guest message count and store in both session and cache
             $newCount = $guestMessageCount + 1;
-            session(["guest_messages_{$sessionId}" => $newCount]);
+            session([$sessionKey => $newCount]);
+            
+            // Store in cache for 24 hours to persist across session resets
+            cache([$cacheKey => $newCount], now()->addDay());
 
             return response()->json([
                 'success' => true,

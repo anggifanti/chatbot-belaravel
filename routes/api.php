@@ -48,4 +48,17 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/users/{userId}/conversations', [AdminController::class, 'getUserConversations']);
     Route::get('/conversations/{conversationId}', [AdminController::class, 'getConversationDetails']);
     Route::delete('/conversations/{conversationId}', [AdminController::class, 'deleteConversation']);
+    
+    // Rating management
+    Route::get('/ratings', [App\Http\Controllers\Api\RatingController::class, 'getAdminRatings']);
+    Route::get('/ratings/stats', [App\Http\Controllers\Api\RatingController::class, 'getAdminRatingStats']);
+});
+
+// Public rating routes (accessible to both authenticated and guest users)
+Route::post('/ratings', [App\Http\Controllers\Api\RatingController::class, 'submitRating']);
+Route::get('/ratings/stats', [App\Http\Controllers\Api\RatingController::class, 'getRatingStats']);
+
+// Authenticated user rating routes
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/my-ratings', [App\Http\Controllers\Api\RatingController::class, 'getUserRatings']);
 });

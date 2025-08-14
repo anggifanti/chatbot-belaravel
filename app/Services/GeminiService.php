@@ -12,9 +12,13 @@ class GeminiService
 
     public function __construct()
     {
-        $this->apiKey = env('GEMINI_API_KEY');
+        $this->apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY'));
         $this->baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
-        \Log::info('Gemini API Key: ' . $this->apiKey);
+        
+        if (empty($this->apiKey)) {
+            \Log::error('GEMINI_API_KEY is empty or not found! Please check your .env configuration.');
+            throw new \Exception('Gemini API key is not configured properly.');
+        }
     }
 
     /**
