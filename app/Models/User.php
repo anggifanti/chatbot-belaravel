@@ -272,4 +272,30 @@ class User extends Authenticatable
     {
         return $query->where('is_admin', false);
     }
+
+    /**
+     * Get conversation count (method version)
+     */
+    public function getConversationCount()
+    {
+        return $this->conversations()->count();
+    }
+
+    /**
+     * Get total message count
+     */
+    public function getTotalMessageCount()
+    {
+        return $this->messages()->count();
+    }
+
+    /**
+     * Get messages sent today
+     */
+    public function getMessagesToday()
+    {
+        return $this->messages()
+            ->whereDate('messages.created_at', now()->format('Y-m-d'))
+            ->count();
+    }
 }
