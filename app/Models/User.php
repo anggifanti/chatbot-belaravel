@@ -106,6 +106,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the ratings submitted by the user
+     */
+    public function ratings()
+    {
+        return $this->hasMany(Rating::class);
+    }
+
+    /**
      * Get the user's latest conversation
      */
     public function latestConversation()

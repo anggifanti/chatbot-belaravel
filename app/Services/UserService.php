@@ -38,12 +38,9 @@ class UserService
      */
     private function getUserAverageRating(User $user): ?float
     {
-        $ratings = $user->conversations()
-            ->with('ratings')
-            ->get()
-            ->pluck('ratings')
-            ->flatten()
-            ->where('rating', '>', 0);
+        $ratings = $user->ratings()
+            ->where('rating', '>', 0)
+            ->get();
 
         if ($ratings->isEmpty()) {
             return null;
