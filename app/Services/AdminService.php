@@ -185,4 +185,75 @@ class AdminService
             'message_activity' => $messageActivity,
         ];
     }
+
+    /**
+     * Get user conversations for admin panel
+     */
+    public function getUserConversations(int $userId): Collection
+    {
+        $user = User::where('is_admin', false)->findOrFail($userId);
+        
+        return $user->conversations()
+            ->with(['messages' => function ($query) {
+                $query->latest()->limit(5);
+            }])
+            ->withCount('messages')
+            ->latest()
+            ->get();
+    }
+
+    /**
+     * Delete a user
+     */
+    public function deleteUser(int $userId): void
+    {
+        $user = User::where('is_admin', false)->findOrFail($userId);
+        
+        // Delete associated conversations and messages
+        $user->conversations()->delete();
+        $user->messages()->delete();
+        
+        // Delete the user
+        $user->delete();
+    }
+
+    /**
+     * Update user premium status
+     */
+    public function updateUserPremium(int $userId, bool $isPremium): User
+    {
+        $user = User::where('is_admin', false)->findOrFail($userId);
+        
+        $user->update([
+            'is_premium' => $isPremium,
+            'subscription_expires_at' => $isPremium ? null : null,
+        ]);
+        
+        return $user->fresh();
+    }
+
+    /**
+     * Get conversation details
+     */
+    public function getConversationDetails(int $conversationId): Conversation
+    {
+        return Conversation::with(['user', 'messages' => function ($query) {
+            $query->orderBy('created_at');
+        }])
+        ->findOrFail($conversationId);
+    }
+
+    /**
+     * Delete a conversation
+     */
+    public function deleteConversation(int $conversationId): void
+    {
+        $conversation = Conversation::findOrFail($conversationId);
+        
+        // Delete associated messages
+        $conversation->messages()->delete();
+        
+        // Delete the conversation
+        $conversation->delete();
+    }
 }
