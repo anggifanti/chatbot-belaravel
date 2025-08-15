@@ -173,10 +173,20 @@ class AuthController extends Controller
      */
     public function updateProfile(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $rules = [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $request->user()->id,
-        ]);
+        ];
+
+        // Add password validation if password fields are present
+        if ($request->has('current_password') || $request->has('password')) {
+            $rules = array_merge($rules, [
+                'current_password' => 'required_with:password|string',
+                'password' => 'required_with:current_password|string|min:8|confirmed',
+            ]);
+        }
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -188,7 +198,29 @@ class AuthController extends Controller
 
         try {
             $user = $request->user();
-            $user->update($request->only(['name', 'email']));
+
+            // Handle password change
+            if ($request->has('current_password') && $request->has('password')) {
+                if (!Hash::check($request->current_password, $user->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Current password is incorrect'
+                    ], 401);
+                }
+                
+                $user->password = Hash::make($request->password);
+            }
+
+            // Update other fields
+            if ($request->has('name')) {
+                $user->name = $request->name;
+            }
+            
+            if ($request->has('email')) {
+                $user->email = $request->email;
+            }
+
+            $user->save();
 
             return response()->json([
                 'success' => true,

@@ -66,7 +66,7 @@ class UserService
 
             $usage[] = [
                 'date' => $date->format('Y-m-d'),
-                'messages' => $messageCount,
+                'count' => $messageCount,
             ];
         }
 
