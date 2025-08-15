@@ -115,4 +115,111 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get user conversations for admin panel
+     */
+    public function getUserConversations(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $conversations = $this->adminService->getUserConversations($userId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $conversations
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve user conversations',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a user
+     */
+    public function deleteUser(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $this->adminService->deleteUser($userId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update user premium status
+     */
+    public function updateUserPremium(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $isPremium = $request->boolean('is_premium');
+            $user = $this->adminService->updateUserPremium($userId, $isPremium);
+
+            return response()->json([
+                'success' => true,
+                'data' => new UserResource($user),
+                'message' => 'User premium status updated successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update user premium status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get conversation details
+     */
+    public function getConversationDetails(Request $request, int $conversationId): JsonResponse
+    {
+        try {
+            $conversation = $this->adminService->getConversationDetails($conversationId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $conversation
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve conversation details',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a conversation
+     */
+    public function deleteConversation(Request $request, int $conversationId): JsonResponse
+    {
+        try {
+            $this->adminService->deleteConversation($conversationId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Conversation deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete conversation',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
