@@ -92,10 +92,16 @@ class AdminService
      */
     public function getChatStats(): array
     {
-        // Total statistics
+        // Total statistics (all time)
         $totalMessages = Message::count();
         $totalConversations = Conversation::count();
         $totalUsers = User::where('is_admin', false)->count();
+        
+        // Period-specific statistics (last 30 days)
+        $periodStart = now()->subDays(30);
+        $totalMessagesPeriod = Message::where('created_at', '>=', $periodStart)->count();
+        $totalConversationsPeriod = Conversation::where('created_at', '>=', $periodStart)->count();
+        
         $averageMessagesPerConversation = $totalConversations > 0 
             ? round($totalMessages / $totalConversations, 1) 
             : 0;
@@ -112,9 +118,11 @@ class AdminService
             ];
         }
 
-        // Top active users (by message count)
+        // Top active users (by message count in the last 30 days)
         $topActiveUsers = User::where('is_admin', false)
-            ->withCount('messages')
+            ->withCount(['messages' => function ($query) use ($periodStart) {
+                $query->where('messages.created_at', '>=', $periodStart);
+            }])
             ->orderBy('messages_count', 'desc')
             ->limit(10)
             ->get()
@@ -139,6 +147,8 @@ class AdminService
             'total_messages' => $totalMessages,
             'total_conversations' => $totalConversations,
             'total_users' => $totalUsers,
+            'total_messages_period' => $totalMessagesPeriod,
+            'total_conversations_period' => $totalConversationsPeriod,
             'average_messages_per_conversation' => $averageMessagesPerConversation,
             'messages_per_day' => $messagesPerDay,
             'top_active_users' => $topActiveUsers,
